@@ -1,4 +1,5 @@
 import Cocoa
+import SwiftUI
 import AVFoundation
 import ApplicationServices
 
@@ -17,12 +18,13 @@ struct Config {
     }
     /// Order: process env, ~/.mumble/api_key, then `export GEMINI_API_KEY=...` in ~/.zshenv / ~/.zsh.env / ~/.zprofile / ~/.zshrc
     /// (apps launched from Finder don't inherit shell variables, so we read the files directly).
-    static var apiKey: String? {
+    static var apiKey: String? { lookup()?.key }
+    static func lookup() -> (key: String, source: String)? {
         let env = ProcessInfo.processInfo.environment
-        for n in ["GEMINI_API_KEY", "GOOGLE_API_KEY"] { if let k = env[n], !k.isEmpty { return k } }
+        for n in ["GEMINI_API_KEY", "GOOGLE_API_KEY"] { if let k = env[n], !k.isEmpty { return (k, "environment variable") } }
         if let s = try? String(contentsOfFile: dir + "/api_key", encoding: .utf8) {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty { return t }
+            if !t.isEmpty { return (t, "~/.mumble/api_key") }
         }
         for f in [".zshenv", ".zsh.env", ".zprofile", ".zshrc"] {
             guard let text = try? String(contentsOfFile: NSHomeDirectory() + "/" + f, encoding: .utf8) else { continue }
@@ -35,7 +37,7 @@ struct Config {
                     var v = String(l.dropFirst(name.count + 1))
                     if let h = v.range(of: " #") { v = String(v[..<h.lowerBound]) }
                     v = v.trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
-                    if !v.isEmpty && !v.contains("$") { return v }
+                    if !v.isEmpty && !v.contains("$") { return (v, "~/" + f) }
                 }
             }
         }
@@ -95,6 +97,20 @@ enum Gemini {
             if !t.isEmpty { return (t == "<EMPTY>" ? "" : t, model) }
         }
         return (raw, "raw")
+    }
+
+    static func testKey(_ key: String) async -> String {
+        var req = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent")!)
+        req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "x-goog-api-key"); req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["contents": [["parts": [["text": "Reply with: ok"]]]]])
+        do {
+            let (d, r) = try await URLSession.shared.data(for: req)
+            let c = (r as? HTTPURLResponse)?.statusCode ?? 0
+            if c == 200 { return "OK" }
+            if let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let m = (j["error"] as? [String: Any])?["message"] as? String { return "Error \(c): \(m.prefix(120))" }
+            return "Error \(c)"
+        } catch { return error.localizedDescription }
     }
 
     struct Failure: Error, CustomStringConvertible { let description: String }
@@ -314,6 +330,153 @@ enum Inserter {
     }
 }
 
+// MARK: - UI state
+
+final class AppState: ObservableObject {
+    static let shared = AppState()
+    struct Entry: Identifiable { let id = UUID(); let date: Date; let text: String; let model: String }
+    @Published var keySource: String? = nil
+    @Published var mic = false
+    @Published var ax = false
+    @Published var phase = "Ready"
+    @Published var lastError: String? = nil
+    @Published var history: [Entry] = []
+
+    func refresh() {
+        keySource = Config.lookup()?.source
+        mic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        ax = AXIsProcessTrusted()
+    }
+    func add(text: String, model: String) {
+        history.insert(Entry(date: Date(), text: text, model: model), at: 0)
+        if history.count > 50 { history.removeLast() }
+        lastError = nil
+    }
+    var ready: Bool { keySource != nil && mic && ax }
+}
+
+struct StatusRow: View {
+    let ok: Bool; let title: String; let detail: String
+    var action: (title: String, run: () -> Void)? = nil
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundColor(ok ? .green : .orange).font(.system(size: 18))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(detail).font(.system(size: 11)).foregroundColor(.secondary)
+            }
+            Spacer()
+            if !ok, let a = action { Button(a.title, action: a.run) }
+        }
+    }
+}
+
+struct MainView: View {
+    @ObservedObject var st = AppState.shared
+    @State private var keyInput = ""
+    @State private var keyMsg = ""
+    @State private var tryText = ""
+    let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 48, height: 48)
+                    VStack(alignment: .leading) {
+                        Text("Mumble").font(.system(size: 22, weight: .bold))
+                        Text("Hold Right ⌥ (Option), speak, release.").font(.system(size: 12)).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(st.ready ? st.phase : "Setup needed")
+                        .font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).padding(.vertical, 4)
+                        .background((st.ready ? (st.phase == "Ready" ? Color.green : Color.blue) : Color.orange).opacity(0.2))
+                        .clipShape(Capsule())
+                }
+
+                GroupBox(label: Text("Setup").font(.system(size: 12, weight: .semibold))) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        StatusRow(ok: st.keySource != nil, title: "Gemini API key",
+                                  detail: st.keySource.map { "Found in \($0)" } ?? "Not found. Paste one below, or add export GEMINI_API_KEY=… to ~/.zshenv")
+                        if st.keySource == nil || !keyMsg.isEmpty {
+                            HStack {
+                                SecureField("Paste Gemini API key", text: $keyInput).textFieldStyle(.roundedBorder)
+                                Button("Save & Test") { saveKey() }.disabled(keyInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                            if !keyMsg.isEmpty { Text(keyMsg).font(.system(size: 11)).foregroundColor(keyMsg == "Key works ✓" ? .green : .red) }
+                            Link("Get a free key at aistudio.google.com/apikey", destination: URL(string: "https://aistudio.google.com/apikey")!).font(.system(size: 11))
+                        }
+                        Divider()
+                        StatusRow(ok: st.mic, title: "Microphone", detail: st.mic ? "Allowed" : "Needed to hear you",
+                                  action: ("Allow", { AVCaptureDevice.requestAccess(for: .audio) { _ in
+                                      DispatchQueue.main.async { AppState.shared.refresh() } }
+                                      NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!) }))
+                        Divider()
+                        StatusRow(ok: st.ax, title: "Accessibility", detail: st.ax ? "Allowed" : "Needed to detect the hotkey and paste text",
+                                  action: ("Open Settings", {
+                                      let o = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+                                      _ = AXIsProcessTrustedWithOptions(o) }))
+                    }.padding(6)
+                }
+
+                GroupBox(label: Text("Try it").font(.system(size: 12, weight: .semibold))) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Click in the box, then hold Right ⌥ and speak.").font(.system(size: 11)).foregroundColor(.secondary)
+                        TextEditor(text: $tryText).font(.system(size: 13)).frame(height: 80)
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.gray.opacity(0.4)))
+                        if let e = st.lastError { Text("Last error: \(e)").font(.system(size: 11)).foregroundColor(.red) }
+                    }.padding(6)
+                }
+
+                GroupBox(label: Text("History").font(.system(size: 12, weight: .semibold))) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if st.history.isEmpty { Text("Your dictations will show up here.").font(.system(size: 11)).foregroundColor(.secondary) }
+                        ForEach(st.history.prefix(15)) { e in
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(e.text).font(.system(size: 12)).textSelection(.enabled)
+                                    Text("\(e.date.formatted(date: .omitted, time: .shortened)) · \(e.model)").font(.system(size: 10)).foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(e.text, forType: .string) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.borderless)
+                            }
+                        }
+                    }.padding(6).frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                HStack {
+                    Button("Edit Dictionary…") { NSWorkspace.shared.open(URL(fileURLWithPath: Config.dir + "/dictionary.txt")) }
+                    Spacer()
+                    Text("Mumble stays in your menu bar when this window is closed.").font(.system(size: 10)).foregroundColor(.secondary)
+                }
+            }.padding(20)
+        }
+        .frame(minWidth: 480, minHeight: 560)
+        .background(Color(red: 0.08, green: 0.08, blue: 0.11))
+        .preferredColorScheme(.dark)
+        .onAppear { st.refresh() }
+        .onReceive(timer) { _ in st.refresh() }
+    }
+
+    func saveKey() {
+        let k = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        keyMsg = "Testing…"
+        Task {
+            let r = await Gemini.testKey(k)
+            await MainActor.run {
+                if r == "OK" {
+                    Config.ensureDir()
+                    let path = Config.dir + "/api_key"
+                    try? k.write(toFile: path, atomically: true, encoding: .utf8)
+                    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+                    keyMsg = "Key works ✓"; keyInput = ""; st.refresh()
+                } else { keyMsg = r }
+            }
+        }
+    }
+}
+
 // MARK: - HUD
 
 final class HUD {
@@ -370,12 +533,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var frontApp: String?
     var startedAt = Date()
     var live: LiveSession?
+    var window: NSWindow?
 
     func applicationDidFinishLaunching(_ n: Notification) {
         Config.ensureDir()
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         setIcon("mic")
         let m = NSMenu()
+        m.addItem(withTitle: "Open Mumble…", action: #selector(showWindow), keyEquivalent: "").target = self
+        m.addItem(.separator())
         let h = NSMenuItem(title: "Hold Right ⌥ (Option) to dictate", action: nil, keyEquivalent: ""); h.isEnabled = false
         m.addItem(h)
         lastMenuItem = NSMenuItem(title: "Last: —", action: #selector(copyLast), keyEquivalent: ""); lastMenuItem.target = self
@@ -391,7 +557,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         requestPermissions()
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] e in self?.flags(e) }
         NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] e in self?.flags(e); return e }
+        buildMainMenu()
+        showWindow()
         if Config.apiKey == nil { hud.show("No API key set", color: .systemOrange); hud.hide(after: 4) }
+    }
+
+    @objc func showWindow() {
+        if window == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            w.title = "Mumble"; w.isReleasedWhenClosed = false
+            w.appearance = NSAppearance(named: .darkAqua)
+            w.backgroundColor = NSColor(red: 0.08, green: 0.08, blue: 0.11, alpha: 1)
+            w.contentView = NSHostingView(rootView: MainView())
+            w.center(); window = w
+        }
+        AppState.shared.refresh()
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showWindow(); return true
+    }
+
+    func buildMainMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem(); main.addItem(appItem)
+        let appMenu = NSMenu(); appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Quit Mumble", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let editItem = NSMenuItem(); main.addItem(editItem)
+        let edit = NSMenu(title: "Edit"); editItem.submenu = edit
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        NSApp.mainMenu = main
     }
 
     func requestPermissions() {
@@ -421,19 +622,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startedAt = Date()
         setIcon("mic.fill")
         hud.show("Listening…")
+        AppState.shared.phase = "Listening…"
     }
 
     func end() {
         guard recorder.recording else { return }
         let (wav, secs) = recorder.stop()
         setIcon("mic")
-        if secs < 0.4 { hud.hide(); return }   // accidental tap
+        if secs < 0.4 { hud.hide(); AppState.shared.phase = "Ready"; return }   // accidental tap
         busy = true
         hud.show("Transcribing…", color: .systemBlue)
+        AppState.shared.phase = "Transcribing…"
         let app = frontApp
         let ls = live; live = nil; recorder.onChunk = nil
         Task {
-            defer { self.busy = false }
+            defer { self.busy = false; DispatchQueue.main.async { AppState.shared.phase = "Ready" } }
             do {
                 var text = "", model = ""
                 if let raw = await ls?.finish() {
@@ -447,6 +650,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let (text, model) = (fText, fModel)
                     if text.isEmpty { self.hud.show("No speech heard", color: .systemGray); self.hud.hide(after: 1.2); return }
                     Inserter.paste(text)
+                    AppState.shared.add(text: text, model: model)
                     self.lastMenuItem.title = "Last: " + String(text.prefix(48))
                     self.lastMenuItem.representedObject = text
                     self.hud.show("Done · \(model)", color: .systemGreen)
@@ -455,6 +659,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 await MainActor.run {
                     NSLog("Mumble error: \(error)")
+                    AppState.shared.lastError = "\(error)"
                     self.hud.show("Failed — see log", color: .systemOrange); self.hud.hide(after: 3)
                 }
             }
@@ -512,8 +717,32 @@ if args.count >= 3, args[1] == "--live" {
     sem.wait(); exit(0)
 }
 
+if args.count >= 3, args[1] == "--snapshot" {
+    // Mumble --snapshot out.png : renders the main window (dark) to a PNG, no screen permission needed
+    let a = NSApplication.shared
+    a.setActivationPolicy(.accessory)
+    AppState.shared.refresh()
+    AppState.shared.add(text: "Let's meet at 4 PM tomorrow, and please bring the budget report.", model: "live+gemini-3.5-flash-lite")
+    let host = NSHostingView(rootView: MainView().environment(\.colorScheme, .dark))
+    let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 640), styleMask: [.titled], backing: .buffered, defer: false)
+    w.appearance = NSAppearance(named: .darkAqua); w.backgroundColor = NSColor(red: 0.08, green: 0.08, blue: 0.11, alpha: 1)
+    w.contentView = host; w.orderFrontRegardless()
+    RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+    let v = w.contentView!
+    let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds)!
+    v.cacheDisplay(in: v.bounds, to: rep)
+    let out = NSImage(size: v.bounds.size)
+    out.lockFocus()
+    NSColor(red: 0.08, green: 0.08, blue: 0.11, alpha: 1).setFill(); NSRect(origin: .zero, size: v.bounds.size).fill()
+    rep.draw(in: NSRect(origin: .zero, size: v.bounds.size))
+    out.unlockFocus()
+    let png = NSBitmapImageRep(data: out.tiffRepresentation!)!
+    try! png.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+    exit(0)
+}
+
 let app = NSApplication.shared
-app.setActivationPolicy(.accessory)
+app.setActivationPolicy(.regular)
 let delegate = AppDelegate()
 app.delegate = delegate
 app.run()

@@ -23,7 +23,6 @@ cat > "$APP/Contents/Info.plist" <<PL
 <key>CFBundleVersion</key><string>${VERSION}</string>
 <key>CFBundleShortVersionString</key><string>${VERSION}</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>LSUIElement</key><true/>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSMicrophoneUsageDescription</key><string>Mumble records your voice while you hold the dictation key.</string>
 </dict></plist>

@@ -3,10 +3,11 @@ let out = CommandLine.arguments[1]
 try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
 func png(_ px: Int, _ name: String) {
     let img = NSImage(size: NSSize(width: px, height: px), flipped: false) { r in
-        let g = NSGradient(colors: [NSColor(red: 0.36, green: 0.30, blue: 0.95, alpha: 1), NSColor(red: 0.10, green: 0.75, blue: 0.95, alpha: 1)])!
+        let g = NSGradient(colors: [NSColor(red: 0.04, green: 0.04, blue: 0.08, alpha: 1), NSColor(red: 0.13, green: 0.10, blue: 0.26, alpha: 1)])!
         let path = NSBezierPath(roundedRect: r.insetBy(dx: CGFloat(px) * 0.05, dy: CGFloat(px) * 0.05), xRadius: CGFloat(px) * 0.22, yRadius: CGFloat(px) * 0.22)
         g.draw(in: path, angle: -45)
-        let cfg = NSImage.SymbolConfiguration(pointSize: CGFloat(px) * 0.5, weight: .semibold).applying(.init(paletteColors: [.white]))
+        NSColor(white: 1, alpha: 0.10).setStroke(); path.lineWidth = max(1, CGFloat(px) * 0.01); path.stroke()
+        let cfg = NSImage.SymbolConfiguration(pointSize: CGFloat(px) * 0.5, weight: .semibold).applying(.init(paletteColors: [NSColor(red: 0.45, green: 0.85, blue: 1.0, alpha: 1)]))
         if let s = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)?.withSymbolConfiguration(cfg) {
             let sz = s.size; s.draw(in: NSRect(x: (r.width - sz.width) / 2, y: (r.height - sz.height) / 2, width: sz.width, height: sz.height))
         }

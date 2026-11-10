@@ -12,7 +12,7 @@ An open-source alternative to Wispr Flow. Free to run: transcription uses a free
 - Applies self-corrections: *"3 pm, no wait, 4 pm"* → *"4 PM"*.
 - Adds punctuation and capitalization; matches tone to the frontmost app (casual in chat, literal in code editors).
 - Personal dictionary for names and jargon: `~/.mumble/dictionary.txt`.
-- Lives in the menu bar, no window or Dock icon.
+- Dark app window with setup checks (API key, Microphone, Accessibility), a "try it" box and dictation history; it also lives in the menu bar after you close the window.
 
 ## Install
 
@@ -25,7 +25,7 @@ An open-source alternative to Wispr Flow. Free to run: transcription uses a free
    export GEMINI_API_KEY="your-key"
    ```
 
-   That's the only setup. Mumble reads it from `~/.zshenv`, `~/.zsh.env`, `~/.zprofile` or `~/.zshrc` (a Finder-launched app doesn't inherit shell variables, so it parses these files). Alternatively put the key alone in `~/.mumble/api_key`. Then relaunch Mumble.
+   That's the only setup (or paste the key into the app window's setup panel, which saves it to `~/.mumble/api_key`). Mumble reads it from `~/.zshenv`, `~/.zsh.env`, `~/.zprofile` or `~/.zshrc` (a Finder-launched app doesn't inherit shell variables, so it parses these files). Alternatively put the key alone in `~/.mumble/api_key`. Then relaunch Mumble.
 
 ## How it works
 
@@ -70,7 +70,7 @@ Releases are built by GitHub Actions: push a tag like `v1.0.0` and `Mumble.dmg` 
 
 ## Limitations / roadmap
 
-- Hotkey is fixed to Right Option; no settings window or history yet.
+- Hotkey is fixed to Right Option; history is in-memory only (cleared on quit).
 - Spoken punctuation commands ("comma", "new paragraph") are unreliable because the live model drops them.
 - Unsigned build; macOS shows a first-launch warning.
 - Not affiliated with Wispr or with the [Mumble](https://www.mumble.info) VoIP project.
