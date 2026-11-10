@@ -1,0 +1,6 @@
+Mumble.app/
+Mumble.dmg
+.build*
+.DS_Store
+*.wav
+*.aiff
