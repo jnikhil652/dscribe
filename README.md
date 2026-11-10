@@ -1,9 +1,9 @@
-<h1 align="center">Mumble</h1>
+<h1 align="center">DScribe</h1>
 <p align="center"><b>Push-to-talk voice dictation for macOS, powered by Gemini.</b><br>
 Hold a key, speak, release — clean, punctuated text appears in whatever app you're typing in.<br>
 An open-source alternative to Wispr Flow. Free to run: transcription uses a free Gemini model.</p>
 
-<p align="center"><a href="https://github.com/jnikhil652/mumble/releases/latest/download/Mumble.dmg"><b>⬇ Download Mumble.dmg</b></a> · macOS 13+ · Apple Silicon &amp; Intel</p>
+<p align="center"><a href="https://github.com/jnikhil652/dscribe/releases/latest/download/DScribe.dmg"><b>⬇ Download DScribe.dmg</b></a> · macOS 13+ · Apple Silicon &amp; Intel</p>
 
 ## What it does
 
@@ -11,21 +11,21 @@ An open-source alternative to Wispr Flow. Free to run: transcription uses a free
 - Removes filler words and stutters ("um", "the the").
 - Applies self-corrections: *"3 pm, no wait, 4 pm"* → *"4 PM"*.
 - Adds punctuation and capitalization; matches tone to the frontmost app (casual in chat, literal in code editors).
-- Personal dictionary for names and jargon: `~/.mumble/dictionary.txt`.
+- Personal dictionary for names and jargon: `~/.dscribe/dictionary.txt`.
 - Dark app window with setup checks (API key, Microphone, Accessibility), a "try it" box and dictation history; it also lives in the menu bar after you close the window.
 
 ## Install
 
-1. [Download Mumble.dmg](https://github.com/jnikhil652/mumble/releases/latest/download/Mumble.dmg), open it, drag **Mumble** to **Applications**.
-2. Mumble is not notarized (that needs a paid Apple Developer account), so macOS blocks the first launch with *"Apple could not verify Mumble is free of malware"*. Click **Done**, then open **System Settings → Privacy & Security**, scroll down to *"Mumble was blocked"* and click **Open Anyway**. (On macOS 14 and earlier, right-click → Open also works.) Or from a terminal: `xattr -dr com.apple.quarantine /Applications/Mumble.app`
-3. Grant **Microphone** and **Accessibility** when prompted (Accessibility lets Mumble see the hotkey and paste text).
+1. [Download DScribe.dmg](https://github.com/jnikhil652/dscribe/releases/latest/download/DScribe.dmg), open it, drag **DScribe** to **Applications**.
+2. DScribe is not notarized (that needs a paid Apple Developer account), so macOS blocks the first launch with *"Apple could not verify DScribe is free of malware"*. Click **Done**, then open **System Settings → Privacy & Security**, scroll down to *"DScribe was blocked"* and click **Open Anyway**. (On macOS 14 and earlier, right-click → Open also works.) Or from a terminal: `xattr -dr com.apple.quarantine /Applications/DScribe.app`
+3. Grant **Microphone** and **Accessibility** when prompted (Accessibility lets DScribe see the hotkey and paste text).
 4. Add your Gemini API key (free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)) to `~/.zshenv`:
 
    ```sh
    export GEMINI_API_KEY="your-key"
    ```
 
-   That's the only setup (or paste the key into the app window's setup panel, which saves it to `~/.mumble/api_key`). Mumble reads it from `~/.zshenv`, `~/.zsh.env`, `~/.zprofile` or `~/.zshrc` (a Finder-launched app doesn't inherit shell variables, so it parses these files). Alternatively put the key alone in `~/.mumble/api_key`. Then relaunch Mumble.
+   That's the only setup (or paste the key into the app window's setup panel, which saves it to `~/.dscribe/api_key`). DScribe reads it from `~/.zshenv`, `~/.zsh.env`, `~/.zprofile` or `~/.zshrc` (a Finder-launched app doesn't inherit shell variables, so it parses these files). Alternatively put the key alone in `~/.dscribe/api_key`. Then relaunch DScribe.
 
 ## How it works
 
@@ -39,41 +39,41 @@ Typical latency after releasing the key is ~2 seconds.
 
 ### Using Gemini 3.8
 
-Gemini 3.8 (`gemini-3.8-flash`) is supported but **off by default**: when this was developed it was frequently overloaded or slow (503s/timeouts), which is bad for dictation. To prefer it, put models in `~/.mumble/models` (one per line, tried in order with short timeouts, falling through on failure):
+Gemini 3.8 (`gemini-3.8-flash`) is supported but **off by default**: when this was developed it was frequently overloaded or slow (503s/timeouts), which is bad for dictation. To prefer it, put models in `~/.dscribe/models` (one per line, tried in order with short timeouts, falling through on failure):
 
 ```
 gemini-3.8-flash
 gemini-3.5-flash-lite
 ```
 
-`MUMBLE_MODELS` (comma-separated) and `MUMBLE_LIVE_MODEL` environment variables override these for testing.
+`DSCRIBE_MODELS` (comma-separated) and `DSCRIBE_LIVE_MODEL` environment variables override these for testing.
 
 ## Privacy
 
-Audio goes straight from your Mac to the Google Gemini API using your own key. Mumble has no server and no telemetry. Your key never leaves your machine except in requests to Google. Free-tier Gemini usage may be used by Google to improve its products — use a paid key if that matters to you.
+Audio goes straight from your Mac to the Google Gemini API using your own key. DScribe has no server and no telemetry. Your key never leaves your machine except in requests to Google. Free-tier Gemini usage may be used by Google to improve its products — use a paid key if that matters to you.
 
 ## Build from source
 
 ```sh
-git clone https://github.com/jnikhil652/mumble && cd mumble
-./build.sh        # → Mumble.app (universal, ad-hoc signed)
-./make-dmg.sh     # → Mumble.dmg
+git clone https://github.com/jnikhil652/dscribe && cd dscribe
+./build.sh        # → DScribe.app (universal, ad-hoc signed)
+./make-dmg.sh     # → DScribe.dmg
 ```
 
 Requires Xcode command-line tools (Swift 5.9+). Headless pipeline test (no mic needed):
 
 ```sh
-Mumble.app/Contents/MacOS/Mumble --live sample.wav [AppName]   # 16 kHz mono PCM16 WAV
+DScribe.app/Contents/MacOS/DScribe --live sample.wav [AppName]   # 16 kHz mono PCM16 WAV
 ```
 
-Releases are built by GitHub Actions: push a tag like `v1.0.0` and `Mumble.dmg` is attached to the release.
+Releases are built by GitHub Actions: push a tag like `v1.0.0` and `DScribe.dmg` is attached to the release.
 
 ## Limitations / roadmap
 
 - Hotkey is fixed to Right Option; history is in-memory only (cleared on quit).
 - Spoken punctuation commands ("comma", "new paragraph") are unreliable because the live model drops them.
 - Unsigned, un-notarized build; first launch needs *Open Anyway* in Privacy & Security (see Install). You can also build from source, which avoids the warning.
-- Not affiliated with Wispr or with the [Mumble](https://www.mumble.info) VoIP project.
+- Not affiliated with Wispr.
 
 ## License
 

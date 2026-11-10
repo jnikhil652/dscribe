@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mumble — 4 Monochrome Variants</title>
+<title>DScribe — 4 Monochrome Variants</title>
 <style>
   *{box-sizing:border-box;margin:0}
   body{background:#0a0a0a;color:#f5f5f5;font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;padding:56px 24px 110px}
@@ -89,7 +89,7 @@
 </svg>
 
 <div class="wrap">
-  <h1>Mumble — 4 monochrome variants</h1>
+  <h1>DScribe — 4 monochrome variants</h1>
   <p class="sub">Clean, modern, black &amp; white. Each variant has its own logo, app-window style and dictation pill.</p>
   <nav><a href="#A">A · Bars</a><a href="#B">B · Wave</a><a href="#C">C · Monogram</a><a href="#D">D · Orb</a></nav>
   <div id="out"></div>
@@ -106,9 +106,9 @@ const ic=(id,s)=>`<svg width="${s}" height="${s}"><use href="#${id}"/></svg>`;
 const mk=(id,s)=>`<svg width="${s}" height="${s}" viewBox="0 0 64 64"><use href="#${id}m"/></svg>`;
 function win(v){const t=v.theme;return `
 <div class="win ${t}">
-  <div class="tb"><i></i><i></i><i></i><span>Mumble</span></div>
+  <div class="tb"><i></i><i></i><i></i><span>DScribe</span></div>
   <div class="bd">
-    <div class="hd">${ic(v.id,46)}<div><h3>Mumble</h3><p>Hold Right ⌥ (Option), speak, release.</p></div><span class="pl">Ready</span></div>
+    <div class="hd">${ic(v.id,46)}<div><h3>DScribe</h3><p>Hold Right ⌥ (Option), speak, release.</p></div><span class="pl">Ready</span></div>
     <div><div class="lb">Setup</div><div class="cd">
       <div class="rw"><div class="ck">✓</div><div><b>Gemini API key</b><span>Found in ~/.zshenv</span></div></div>
       <div class="rw"><div class="ck">✓</div><div><b>Microphone</b><span>Allowed</span></div></div>
@@ -134,8 +134,8 @@ document.getElementById('out').innerHTML=V.map(v=>`
     <div class="logos">
       <div class="tile b">${ic(v.id,128)}<small>App icon</small></div>
       <div class="tile w">${mk(v.id,112).replace('<svg','<svg style="color:#000"')}<small>Mark · on white</small></div>
-      <div class="tile b wide"><div class="lockup">${ic(v.id,52)}<span class="wm">Mumble</span></div><small>Lockup · black</small></div>
-      <div class="tile w wide"><div class="lockup">${mk(v.id,46).replace('<svg','<svg style="color:#000"')}<span class="wm">Mumble</span></div><small>Lockup · white (mark only)</small></div>
+      <div class="tile b wide"><div class="lockup">${ic(v.id,52)}<span class="wm">DScribe</span></div><small>Lockup · black</small></div>
+      <div class="tile w wide"><div class="lockup">${mk(v.id,46).replace('<svg','<svg style="color:#000"')}<span class="wm">DScribe</span></div><small>Lockup · white (mark only)</small></div>
       <div class="tile g wide"><div class="sizes">${ic(v.id,16)}${ic(v.id,24)}${ic(v.id,32)}${ic(v.id,48)}${ic(v.id,72)}</div><small>16 / 24 / 32 / 48 / 72 px</small></div>
     </div>
     <div>${win(v)}</div>

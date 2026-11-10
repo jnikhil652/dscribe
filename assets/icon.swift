@@ -1,5 +1,5 @@
 import Cocoa
-// Mumble icon, variant "Wave": black rounded square (full tile, avoids the macOS grey plate), one continuous white voice line.
+// DScribe icon, variant "Wave": black rounded square (full tile, avoids the macOS grey plate), one continuous white voice line.
 let out = CommandLine.arguments[1]
 try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
 func png(_ px: Int, _ name: String) {

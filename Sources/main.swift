@@ -6,9 +6,9 @@ import ApplicationServices
 // MARK: - Config
 
 struct Config {
-    static let dir = NSHomeDirectory() + "/.mumble"
+    static let dir = NSHomeDirectory() + "/.dscribe"
     static var models: [String] {
-        if let m = ProcessInfo.processInfo.environment["MUMBLE_MODELS"] { return m.split(separator: ",").map(String.init) }
+        if let m = ProcessInfo.processInfo.environment["DSCRIBE_MODELS"] { return m.split(separator: ",").map(String.init) }
         if let f = try? String(contentsOfFile: dir + "/models", encoding: .utf8) {
             let l = f.split(whereSeparator: { $0 == "\n" || $0 == "," }).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && !$0.hasPrefix("#") }
             if !l.isEmpty { return l }
@@ -16,7 +16,7 @@ struct Config {
         // Fast first (dictation needs ~3s); gemini-3.8-flash is accurate but was overloaded/slow when tested.
         return ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
     }
-    /// Order: process env, ~/.mumble/api_key, then `export GEMINI_API_KEY=...` in ~/.zshenv / ~/.zsh.env / ~/.zprofile / ~/.zshrc
+    /// Order: process env, ~/.dscribe/api_key, then `export GEMINI_API_KEY=...` in ~/.zshenv / ~/.zsh.env / ~/.zprofile / ~/.zshrc
     /// (apps launched from Finder don't inherit shell variables, so we read the files directly).
     static var apiKey: String? { lookup()?.key }
     static func lookup() -> (key: String, source: String)? {
@@ -24,7 +24,7 @@ struct Config {
         for n in ["GEMINI_API_KEY", "GOOGLE_API_KEY"] { if let k = env[n], !k.isEmpty { return (k, "environment variable") } }
         if let s = try? String(contentsOfFile: dir + "/api_key", encoding: .utf8) {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty { return (t, "~/.mumble/api_key") }
+            if !t.isEmpty { return (t, "~/.dscribe/api_key") }
         }
         for f in [".zshenv", ".zsh.env", ".zprofile", ".zshrc"] {
             guard let text = try? String(contentsOfFile: NSHomeDirectory() + "/" + f, encoding: .utf8) else { continue }
@@ -48,6 +48,11 @@ struct Config {
         return s.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
     static func ensureDir() {
+        // One-time migration from the project's earlier name (~/.mumble).
+        let legacy = NSHomeDirectory() + "/." + "mumble"
+        if FileManager.default.fileExists(atPath: legacy), !FileManager.default.fileExists(atPath: dir) {
+            try? FileManager.default.moveItem(atPath: legacy, toPath: dir)
+        }
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let dict = dir + "/dictionary.txt"
         if !FileManager.default.fileExists(atPath: dict) {
@@ -155,7 +160,7 @@ enum Gemini {
 // MARK: - Live transcription (free gemini-3.5-transcribe-live over WebSocket)
 
 final class LiveSession {
-    static var model: String { ProcessInfo.processInfo.environment["MUMBLE_LIVE_MODEL"] ?? "gemini-3.5-transcribe-live" }
+    static var model: String { ProcessInfo.processInfo.environment["DSCRIBE_LIVE_MODEL"] ?? "gemini-3.5-transcribe-live" }
     private var task: URLSessionWebSocketTask?
     private let lock = NSLock()
     private var ready = false, ended = false, finished = false, failed = false
@@ -385,7 +390,7 @@ struct MainView: View {
                 HStack(spacing: 12) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 48, height: 48)
                     VStack(alignment: .leading) {
-                        Text("Mumble").font(.system(size: 22, weight: .bold))
+                        Text("DScribe").font(.system(size: 22, weight: .bold))
                         Text("Hold Right ⌥ (Option), speak, release.").font(.system(size: 12)).foregroundColor(.secondary)
                     }
                     Spacer()
@@ -449,7 +454,7 @@ struct MainView: View {
                 HStack {
                     Button("Edit Dictionary…") { NSWorkspace.shared.open(URL(fileURLWithPath: Config.dir + "/dictionary.txt")) }
                     Spacer()
-                    Text("Mumble stays in your menu bar when this window is closed.").font(.system(size: 10)).foregroundColor(.secondary)
+                    Text("DScribe stays in your menu bar when this window is closed.").font(.system(size: 10)).foregroundColor(.secondary)
                 }
             }.padding(20)
         }
@@ -543,7 +548,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         setIcon("mic")
         let m = NSMenu()
-        m.addItem(withTitle: "Open Mumble…", action: #selector(showWindow), keyEquivalent: "").target = self
+        m.addItem(withTitle: "Open DScribe…", action: #selector(showWindow), keyEquivalent: "").target = self
         m.addItem(.separator())
         let h = NSMenuItem(title: "Hold Right ⌥ (Option) to dictate", action: nil, keyEquivalent: ""); h.isEnabled = false
         m.addItem(h)
@@ -553,7 +558,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         m.addItem(withTitle: "Edit Dictionary…", action: #selector(editDict), keyEquivalent: "").target = self
         m.addItem(withTitle: "Open Privacy Settings…", action: #selector(openPrivacy), keyEquivalent: "").target = self
         m.addItem(.separator())
-        m.addItem(withTitle: "Quit Mumble", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        m.addItem(withTitle: "Quit DScribe", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = m
 
         recorder.onLevel = { [weak self] l in self?.hud.level(l) }
@@ -569,7 +574,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if window == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            w.title = "Mumble"; w.isReleasedWhenClosed = false
+            w.title = "DScribe"; w.isReleasedWhenClosed = false
             w.appearance = NSAppearance(named: .darkAqua)
             w.backgroundColor = NSColor(white: 0.05, alpha: 1)
             w.contentView = NSHostingView(rootView: MainView())
@@ -588,7 +593,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let appMenu = NSMenu(); appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "Quit Mumble", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit DScribe", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let editItem = NSMenuItem(); main.addItem(editItem)
         let edit = NSMenu(title: "Edit"); editItem.submenu = edit
         edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
@@ -676,7 +681,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 await MainActor.run {
-                    NSLog("Mumble error: \(error)")
+                    NSLog("DScribe error: \(error)")
                     AppState.shared.lastError = "\(error)"
                     self.hud.show("Failed — see log", color: .systemOrange); self.hud.hide(after: 3)
                 }
@@ -697,7 +702,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 let args = CommandLine.arguments
 if args.count >= 3, args[1] == "--transcribe" {
-    // Headless test mode: Mumble --transcribe file.wav [AppName]
+    // Headless test mode: DScribe --transcribe file.wav [AppName]
     let wav = try! Data(contentsOf: URL(fileURLWithPath: args[2]))
     let sem = DispatchSemaphore(value: 0)
     Task {
@@ -712,7 +717,7 @@ if args.count >= 3, args[1] == "--transcribe" {
 }
 
 if args.count >= 3, args[1] == "--live" {
-    // Mumble --live file.wav [AppName]  (streams at ~real time, prints timings after "key release")
+    // DScribe --live file.wav [AppName]  (streams at ~real time, prints timings after "key release")
     let wavData = try! Data(contentsOf: URL(fileURLWithPath: args[2]))
     let pcm = wavData.dropFirst(44)
     let sem = DispatchSemaphore(value: 0)
@@ -736,7 +741,7 @@ if args.count >= 3, args[1] == "--live" {
 }
 
 if args.count >= 3, args[1] == "--snapshot" {
-    // Mumble --snapshot out.png : renders the main window (dark) to a PNG, no screen permission needed
+    // DScribe --snapshot out.png : renders the main window (dark) to a PNG, no screen permission needed
     let a = NSApplication.shared
     a.setActivationPolicy(.accessory)
     AppState.shared.refresh()

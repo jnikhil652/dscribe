@@ -1,12 +1,12 @@
 #!/bin/bash
-# Builds Mumble.app then packages Mumble.dmg (drag-to-Applications layout).
+# Builds DScribe.app then packages DScribe.dmg (drag-to-Applications layout).
 set -euo pipefail
 cd "$(dirname "$0")"
 ./build.sh
 STAGE=$(mktemp -d)
-cp -R Mumble.app "$STAGE/"
+cp -R DScribe.app "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-rm -f Mumble.dmg
-hdiutil create -volname "Mumble" -srcfolder "$STAGE" -ov -format UDZO Mumble.dmg >/dev/null
+rm -f DScribe.dmg
+hdiutil create -volname "DScribe" -srcfolder "$STAGE" -ov -format UDZO DScribe.dmg >/dev/null
 rm -rf "$STAGE"
-echo "Created $PWD/Mumble.dmg ($(du -h Mumble.dmg | cut -f1))"
+echo "Created $PWD/DScribe.dmg ($(du -h DScribe.dmg | cut -f1))"
