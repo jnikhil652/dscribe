@@ -17,7 +17,7 @@ An open-source alternative to Wispr Flow. Free to run: transcription uses a free
 ## Install
 
 1. [Download Mumble.dmg](https://github.com/jnikhil652/mumble/releases/latest/download/Mumble.dmg), open it, drag **Mumble** to **Applications**.
-2. The app is not notarized (no paid Apple Developer account), so the first time: **right-click Mumble → Open → Open**.
+2. Mumble is not notarized (that needs a paid Apple Developer account), so macOS blocks the first launch with *"Apple could not verify Mumble is free of malware"*. Click **Done**, then open **System Settings → Privacy & Security**, scroll down to *"Mumble was blocked"* and click **Open Anyway**. (On macOS 14 and earlier, right-click → Open also works.) Or from a terminal: `xattr -dr com.apple.quarantine /Applications/Mumble.app`
 3. Grant **Microphone** and **Accessibility** when prompted (Accessibility lets Mumble see the hotkey and paste text).
 4. Add your Gemini API key (free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)) to `~/.zshenv`:
 
@@ -72,7 +72,7 @@ Releases are built by GitHub Actions: push a tag like `v1.0.0` and `Mumble.dmg` 
 
 - Hotkey is fixed to Right Option; history is in-memory only (cleared on quit).
 - Spoken punctuation commands ("comma", "new paragraph") are unreliable because the live model drops them.
-- Unsigned build; macOS shows a first-launch warning.
+- Unsigned, un-notarized build; first launch needs *Open Anyway* in Privacy & Security (see Install). You can also build from source, which avoids the warning.
 - Not affiliated with Wispr or with the [Mumble](https://www.mumble.info) VoIP project.
 
 ## License
