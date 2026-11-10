@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mumble — Logo & UI</title>
+<style>
+  :root{
+    --bg:#08080d; --panel:#13131b; --panel2:#191923; --line:rgba(255,255,255,.08);
+    --text:#ececf4; --muted:#8b8ba0; --cyan:#73dcff; --violet:#7c5cff; --green:#4ade80; --orange:#fb9f45; --red:#ff5d6c; --blue:#5b9dff;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;padding:48px 24px 96px;
+    background-image:radial-gradient(900px 500px at 15% -10%,rgba(124,92,255,.18),transparent 60%),radial-gradient(700px 400px at 90% 10%,rgba(115,220,255,.10),transparent 60%);}
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{font-size:34px;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--muted);margin-top:6px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:56px 0 18px;font-weight:600}
+  .grid{display:grid;gap:20px}
+  .logos{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:220px}
+  .card.light{background:#f4f4f8;color:#111}
+  .card small{color:var(--muted);font-size:12px}
+  .card.light small{color:#6a6a7a}
+
+  /* ---------- Logo ---------- */
+  .wf rect{fill:url(#g);transform-box:fill-box;transform-origin:center}
+  .anim .wf rect{animation:bar 1.1s ease-in-out infinite}
+  .anim .wf rect:nth-child(2){animation-delay:.12s}.anim .wf rect:nth-child(3){animation-delay:.24s}
+  .anim .wf rect:nth-child(4){animation-delay:.36s}.anim .wf rect:nth-child(5){animation-delay:.48s}.anim .wf rect:nth-child(6){animation-delay:.6s}
+  @keyframes bar{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.45)}}
+  .wordmark{font-size:44px;font-weight:700;letter-spacing:-.04em;background:linear-gradient(90deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .card.light .wordmark{background:linear-gradient(90deg,#1a1233,#2a6bd6);-webkit-background-clip:text;background-clip:text}
+  .lockup{display:flex;align-items:center;gap:14px}
+
+  /* ---------- Window ---------- */
+  .stage{display:grid;grid-template-columns:minmax(0,520px) 1fr;gap:32px;align-items:start}
+  @media(max-width:900px){.stage{grid-template-columns:1fr}}
+  .win{background:#14141c;border:1px solid var(--line);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 .5px rgba(255,255,255,.04);overflow:hidden;max-width:520px}
+  .titlebar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#101017;border-bottom:1px solid var(--line)}
+  .dot{width:12px;height:12px;border-radius:50%}
+  .titlebar .t{margin:0 auto;transform:translateX(-26px);color:var(--muted);font-size:13px}
+  .body{padding:20px;display:flex;flex-direction:column;gap:16px}
+  .head{display:flex;align-items:center;gap:12px}
+  .head h3{font-size:22px;letter-spacing:-.02em}
+  .head p{color:var(--muted);font-size:12px}
+  .pill{margin-left:auto;font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px}
+  .pill.ready{background:rgba(74,222,128,.16);color:var(--green)}
+  .pill.setup{background:rgba(251,159,69,.18);color:var(--orange)}
+  .label{font-size:12px;font-weight:600;margin-bottom:6px}
+  .box{background:var(--panel2);border-radius:12px;padding:12px 14px}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 0}
+  .row+.row{border-top:1px solid var(--line)}
+  .ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;color:#0b0b10;flex:none}
+  .ic.ok{background:var(--green)}.ic.warn{background:var(--orange)}
+  .row b{display:block;font-size:13px}.row span{color:var(--muted);font-size:11px}
+  .btn{margin-left:auto;background:#262633;border:1px solid var(--line);color:var(--text);font:inherit;font-size:12px;padding:5px 12px;border-radius:7px;cursor:pointer}
+  .btn:hover{background:#2f2f3f}
+  .try{height:76px;border:1px solid var(--line);border-radius:8px;background:#1d1d26;padding:10px;color:var(--muted);font-size:13px}
+  .hist{display:flex;gap:10px;align-items:flex-start;padding:8px 0}
+  .hist+.hist{border-top:1px solid var(--line)}
+  .hist p{font-size:12.5px}.hist small{color:var(--muted);font-size:10.5px}
+  .foot{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:10.5px}
+
+  /* ---------- HUD pill ---------- */
+  .hud{display:inline-flex;align-items:center;gap:12px;padding:10px 20px 10px 16px;border-radius:99px;background:rgba(30,30,40,.85);backdrop-filter:blur(20px);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.5);font-weight:500;font-size:13px;min-width:168px}
+  .meter{display:flex;gap:3px;align-items:center;height:22px}
+  .meter i{display:block;width:3px;border-radius:2px;background:var(--red);animation:m 0.9s ease-in-out infinite}
+  .meter i:nth-child(1){height:8px;animation-delay:0s}.meter i:nth-child(2){height:18px;animation-delay:.15s}.meter i:nth-child(3){height:12px;animation-delay:.3s}.meter i:nth-child(4){height:20px;animation-delay:.45s}.meter i:nth-child(5){height:9px;animation-delay:.6s}
+  @keyframes m{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.35)}}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(91,157,255,.25);border-top-color:var(--blue);animation:s .8s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .tick{width:18px;height:18px;border-radius:50%;background:var(--green);display:grid;place-items:center;color:#0b0b10;font-size:11px;font-weight:800}
+  .hudrow{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+
+  /* ---------- Menu bar ---------- */
+  .menubar{background:rgba(20,20,28,.9);border:1px solid var(--line);border-radius:10px;height:28px;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 14px;color:var(--muted);font-size:12px;max-width:520px}
+  .menubar .me{background:rgba(255,255,255,.12);color:#fff;border-radius:5px;padding:2px 6px;display:flex}
+  .menu{margin:6px 0 0 auto;width:250px;background:rgba(32,32,44,.95);border:1px solid var(--line);border-radius:10px;padding:5px;box-shadow:0 20px 50px rgba(0,0,0,.55);font-size:13px}
+  .menu div{padding:5px 10px;border-radius:5px}
+  .menu div:hover{background:var(--violet)}
+  .menu .dis{color:var(--muted)}.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+  .menuwrap{max-width:520px;display:flex;flex-direction:column}
+  .kbd{display:inline-block;border:1px solid var(--line);background:#20202b;border-radius:6px;padding:1px 7px;font-size:12px}
+  .stack{display:flex;flex-direction:column;gap:32px}
+  .note{color:var(--muted);font-size:12px;margin-top:10px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9be9ff"/><stop offset="1" stop-color="#6d7dff"/></linearGradient>
+    <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a0a12"/><stop offset="1" stop-color="#241b4d"/></linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <symbol id="bars" viewBox="0 0 64 64">
+      <g class="wf" filter="url(#glow)">
+        <rect x="9"  y="25" width="5" height="14" rx="2.5"/>
+        <rect x="17.5" y="17" width="5" height="30" rx="2.5"/>
+        <rect x="26"  y="9"  width="5" height="46" rx="2.5"/>
+        <rect x="34.5" y="21" width="5" height="22" rx="2.5"/>
+        <rect x="43"  y="14" width="5" height="36" rx="2.5"/>
+        <rect x="51.5" y="23" width="5" height="18" rx="2.5"/>
+      </g>
+    </symbol>
+    <symbol id="icon" viewBox="0 0 64 64">
+      <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#gm)"/>
+      <rect x="2.5" y="2.5" width="59" height="59" rx="13.5" fill="none" stroke="rgba(255,255,255,.12)"/>
+      <g transform="translate(8 8) scale(.75)"><use href="#bars" width="64" height="64"/></g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>Mumble</h1>
+  <p class="sub">Logo and application UI · dark · hold <span class="kbd">Right ⌥</span>, speak, release.</p>
+
+  <h2>Logo</h2>
+  <div class="grid logos">
+    <div class="card"><svg width="144" height="144"><use href="#icon"/></svg><small>App icon</small></div>
+    <div class="card anim"><svg width="120" height="120" viewBox="0 0 64 64"><use href="#bars"/></svg><small>Mark (animated, like live listening)</small></div>
+    <div class="card"><div class="lockup"><svg width="56" height="56"><use href="#icon"/></svg><span class="wordmark">Mumble</span></div><small>Horizontal lockup · dark</small></div>
+    <div class="card light"><div class="lockup"><svg width="56" height="56"><use href="#icon"/></svg><span class="wordmark">Mumble</span></div><small>Horizontal lockup · light</small></div>
+    <div class="card"><div style="display:flex;gap:14px;align-items:flex-end"><svg width="16" height="16"><use href="#icon"/></svg><svg width="32" height="32"><use href="#icon"/></svg><svg width="64" height="64"><use href="#icon"/></svg></div><small>Small sizes (16 / 32 / 64)</small></div>
+  </div>
+
+  <h2>Application window</h2>
+  <div class="stage">
+    <div class="win">
+      <div class="titlebar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="t">Mumble</span></div>
+      <div class="body">
+        <div class="head">
+          <svg width="48" height="48"><use href="#icon"/></svg>
+          <div><h3>Mumble</h3><p>Hold Right ⌥ (Option), speak, release.</p></div>
+          <span class="pill ready">Ready</span>
+        </div>
+        <div><div class="label">Setup</div>
+          <div class="box">
+            <div class="row"><div class="ic ok">✓</div><div><b>Gemini API key</b><span>Found in ~/.zshenv</span></div></div>
+            <div class="row"><div class="ic ok">✓</div><div><b>Microphone</b><span>Allowed</span></div></div>
+            <div class="row"><div class="ic warn">!</div><div><b>Accessibility</b><span>Needed to detect the hotkey and paste text</span></div><button class="btn">Open Settings</button></div>
+          </div>
+        </div>
+        <div><div class="label">Try it</div>
+          <div class="box"><p style="color:var(--muted);font-size:11px;margin-bottom:8px">Click in the box, then hold Right ⌥ and speak.</p>
+            <div class="try">Let's meet at 4 PM tomorrow, and please bring the budget report.</div></div>
+        </div>
+        <div><div class="label">History</div>
+          <div class="box">
+            <div class="hist"><div style="flex:1"><p>Hey Sarah, can you send me the invoice by Thursday? Thanks.</p><small>1:42 PM · live+gemini-3.5-flash-lite</small></div><button class="btn" style="padding:3px 8px">Copy</button></div>
+            <div class="hist"><div style="flex:1"><p>The Kubernetes cluster is failing on the staging environment, please check the logs.</p><small>1:40 PM · live+gemini-3.5-flash-lite</small></div><button class="btn" style="padding:3px 8px">Copy</button></div>
+          </div>
+        </div>
+        <div class="foot"><button class="btn" style="margin:0">Edit Dictionary…</button><span>Mumble stays in your menu bar when this window is closed.</span></div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div>
+        <div class="label" style="color:var(--muted)">Dictation pill (appears at the bottom of the screen)</div>
+        <div class="hudrow" style="margin-top:10px">
+          <div class="hud"><div class="meter"><i></i><i></i><i></i><i></i><i></i></div>Listening…</div>
+          <div class="hud"><div class="spin"></div>Transcribing…</div>
+          <div class="hud"><div class="tick">✓</div>Done</div>
+        </div>
+        <p class="note">Red level meter while you hold the key, blue spinner while cleaning up, green tick after it pastes.</p>
+      </div>
+      <div>
+        <div class="label" style="color:var(--muted)">Menu bar</div>
+        <div class="menuwrap" style="margin-top:10px">
+          <div class="menubar"><span>Wi-Fi</span><span>Battery</span><span class="me"><svg width="16" height="16" viewBox="0 0 64 64"><g fill="#fff"><rect x="9" y="25" width="5" height="14" rx="2.5"/><rect x="17.5" y="17" width="5" height="30" rx="2.5"/><rect x="26" y="9" width="5" height="46" rx="2.5"/><rect x="34.5" y="21" width="5" height="22" rx="2.5"/><rect x="43" y="14" width="5" height="36" rx="2.5"/><rect x="51.5" y="23" width="5" height="18" rx="2.5"/></g></svg></span><span>Tue 1:42 PM</span></div>
+          <div class="menu">
+            <div>Open Mumble…</div><hr>
+            <div class="dis">Hold Right ⌥ (Option) to dictate</div>
+            <div>Last: Hey Sarah, can you send me…</div><hr>
+            <div>Edit Dictionary…</div>
+            <div>Open Privacy Settings…</div><hr>
+            <div>Quit Mumble</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

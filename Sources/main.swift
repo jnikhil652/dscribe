@@ -360,8 +360,8 @@ struct StatusRow: View {
     var action: (title: String, run: () -> Void)? = nil
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundColor(ok ? .green : .orange).font(.system(size: 18))
+            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .foregroundColor(ok ? .white : .gray).font(.system(size: 18))
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.system(size: 13, weight: .semibold))
                 Text(detail).font(.system(size: 11)).foregroundColor(.secondary)
@@ -391,7 +391,8 @@ struct MainView: View {
                     Spacer()
                     Text(st.ready ? st.phase : "Setup needed")
                         .font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).padding(.vertical, 4)
-                        .background((st.ready ? (st.phase == "Ready" ? Color.green : Color.blue) : Color.orange).opacity(0.2))
+                        .foregroundColor(st.ready ? .black : .white)
+                        .background(st.ready ? Color.white : Color.white.opacity(0.14))
                         .clipShape(Capsule())
                 }
 
@@ -404,7 +405,7 @@ struct MainView: View {
                                 SecureField("Paste Gemini API key", text: $keyInput).textFieldStyle(.roundedBorder)
                                 Button("Save & Test") { saveKey() }.disabled(keyInput.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
-                            if !keyMsg.isEmpty { Text(keyMsg).font(.system(size: 11)).foregroundColor(keyMsg == "Key works ✓" ? .green : .red) }
+                            if !keyMsg.isEmpty { Text(keyMsg).font(.system(size: 11)).foregroundColor(keyMsg == "Key works ✓" ? .white : .red) }
                             Link("Get a free key at aistudio.google.com/apikey", destination: URL(string: "https://aistudio.google.com/apikey")!).font(.system(size: 11))
                         }
                         Divider()
@@ -453,8 +454,9 @@ struct MainView: View {
             }.padding(20)
         }
         .frame(minWidth: 480, minHeight: 560)
-        .background(Color(red: 0.08, green: 0.08, blue: 0.11))
+        .background(Color(white: 0.05))
         .preferredColorScheme(.dark)
+        .tint(.white)
         .onAppear { st.refresh() }
         .onReceive(timer) { _ in st.refresh() }
     }
@@ -502,7 +504,8 @@ final class HUD {
     func show(_ text: String, color: NSColor = .systemRed) {
         DispatchQueue.main.async {
             self.label.stringValue = text
-            self.bar.layer?.backgroundColor = color.cgColor
+            let c: NSColor = (color == .systemRed || color == .systemGreen) ? .white : (color == .systemBlue ? NSColor(white: 0.7, alpha: 1) : color)
+            self.bar.layer?.backgroundColor = c.cgColor
             if let s = NSScreen.main {
                 let f = s.visibleFrame
                 self.panel.setFrameOrigin(NSPoint(x: f.midX - 95, y: f.minY + 60))
@@ -568,7 +571,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             w.title = "Mumble"; w.isReleasedWhenClosed = false
             w.appearance = NSAppearance(named: .darkAqua)
-            w.backgroundColor = NSColor(red: 0.08, green: 0.08, blue: 0.11, alpha: 1)
+            w.backgroundColor = NSColor(white: 0.05, alpha: 1)
             w.contentView = NSHostingView(rootView: MainView())
             w.center(); window = w
         }
@@ -601,8 +604,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = AXIsProcessTrustedWithOptions(opts)
     }
 
+    /// Menu-bar wave mark (template image, adapts to light/dark menu bar). Thicker stroke while listening.
     func setIcon(_ name: String) {
-        item.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "Mumble")
+        let active = name.hasSuffix(".fill")
+        let img = NSImage(size: NSSize(width: 20, height: 16), flipped: false) { _ in
+            func P(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: 1 + x * 18.0 / 64, y: (64 - y) * 16.0 / 64) }
+            let w = NSBezierPath()
+            w.move(to: P(5, 32))
+            w.curve(to: P(20, 17), controlPoint1: P(11, 32), controlPoint2: P(13, 17))
+            w.curve(to: P(32, 47), controlPoint1: P(27, 17), controlPoint2: P(26, 47))
+            w.curve(to: P(44, 14), controlPoint1: P(38, 47), controlPoint2: P(38, 14))
+            w.curve(to: P(59, 32), controlPoint1: P(50, 14), controlPoint2: P(49, 32))
+            w.lineWidth = active ? 2.6 : 1.7; w.lineCapStyle = .round; w.lineJoinStyle = .round
+            NSColor.black.setStroke(); w.stroke()
+            return true
+        }
+        img.isTemplate = true
+        item.button?.image = img
     }
 
     // Right Option key = keyCode 61
@@ -725,7 +743,7 @@ if args.count >= 3, args[1] == "--snapshot" {
     AppState.shared.add(text: "Let's meet at 4 PM tomorrow, and please bring the budget report.", model: "live+gemini-3.5-flash-lite")
     let host = NSHostingView(rootView: MainView().environment(\.colorScheme, .dark))
     let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 640), styleMask: [.titled], backing: .buffered, defer: false)
-    w.appearance = NSAppearance(named: .darkAqua); w.backgroundColor = NSColor(red: 0.08, green: 0.08, blue: 0.11, alpha: 1)
+    w.appearance = NSAppearance(named: .darkAqua); w.backgroundColor = NSColor(white: 0.05, alpha: 1)
     w.contentView = host; w.orderFrontRegardless()
     RunLoop.main.run(until: Date().addingTimeInterval(1.0))
     let v = w.contentView!
@@ -733,7 +751,7 @@ if args.count >= 3, args[1] == "--snapshot" {
     v.cacheDisplay(in: v.bounds, to: rep)
     let out = NSImage(size: v.bounds.size)
     out.lockFocus()
-    NSColor(red: 0.08, green: 0.08, blue: 0.11, alpha: 1).setFill(); NSRect(origin: .zero, size: v.bounds.size).fill()
+    NSColor(white: 0.05, alpha: 1).setFill(); NSRect(origin: .zero, size: v.bounds.size).fill()
     rep.draw(in: NSRect(origin: .zero, size: v.bounds.size))
     out.unlockFocus()
     let png = NSBitmapImageRep(data: out.tiffRepresentation!)!

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mumble — 4 Monochrome Variants</title>
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:#0a0a0a;color:#f5f5f5;font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;padding:56px 24px 110px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:34px;letter-spacing:-.03em;font-weight:700}
+  .sub{color:#8a8a8a;margin-top:6px}
+  nav{display:flex;gap:10px;margin:24px 0 8px;flex-wrap:wrap}
+  nav a{color:#bbb;text-decoration:none;border:1px solid #2a2a2a;border-radius:99px;padding:5px 14px;font-size:12px}
+  nav a:hover{background:#fff;color:#000}
+  section{margin-top:72px;padding-top:8px}
+  .tag{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7a7a7a;font-weight:600}
+  h2{font-size:26px;letter-spacing:-.02em;margin:4px 0 4px}
+  .desc{color:#8a8a8a;max-width:560px;margin-bottom:24px}
+  .row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,520px);gap:28px;align-items:start}
+  @media(max-width:960px){.row{grid-template-columns:1fr}}
+  .logos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .tile{border-radius:18px;min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:22px;border:1px solid #232323}
+  .tile.b{background:#000}.tile.w{background:#fff;color:#000;border-color:#fff}.tile.g{background:#141414}
+  .tile small{font-size:11px;opacity:.5}
+  .lockup{display:flex;align-items:center;gap:12px}
+  .wm{font-size:34px;font-weight:700;letter-spacing:-.045em}
+  .wide{grid-column:1/-1}
+  .sizes{display:flex;gap:14px;align-items:flex-end}
+
+  /* window (themed) */
+  .win{border-radius:14px;overflow:hidden;max-width:520px;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+  .win.dark{--bg:#0d0d0d;--bar:#080808;--card:#171717;--field:#0f0f0f;--line:#262626;--fg:#fafafa;--mut:#858585;--btn:#222;--pillbg:#fafafa;--pillfg:#000;--ok:#fafafa;--okfg:#000;border:1px solid #262626}
+  .win.light{--bg:#fff;--bar:#f3f3f3;--card:#f5f5f5;--field:#fff;--line:#e4e4e4;--fg:#0a0a0a;--mut:#767676;--btn:#e9e9e9;--pillbg:#0a0a0a;--pillfg:#fff;--ok:#0a0a0a;--okfg:#fff;border:1px solid #ddd}
+  .win{background:var(--bg);color:var(--fg)}
+  .tb{height:36px;background:var(--bar);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;padding:0 13px;font-size:12px;color:var(--mut)}
+  .tb i{width:11px;height:11px;border-radius:50%;background:var(--line);display:block}
+  .tb span{margin:0 auto;transform:translateX(-24px)}
+  .bd{padding:20px;display:flex;flex-direction:column;gap:16px}
+  .hd{display:flex;align-items:center;gap:12px}
+  .hd h3{font-size:21px;letter-spacing:-.03em}
+  .hd p{color:var(--mut);font-size:12px}
+  .pl{margin-left:auto;font-size:11px;font-weight:600;padding:4px 11px;border-radius:99px;background:var(--pillbg);color:var(--pillfg)}
+  .lb{font-size:11px;font-weight:600;color:var(--mut);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase}
+  .cd{background:var(--card);border-radius:12px;padding:6px 14px}
+  .rw{display:flex;align-items:center;gap:11px;padding:10px 0}
+  .rw+.rw{border-top:1px solid var(--line)}
+  .rw b{display:block;font-size:13px;font-weight:600}.rw span{color:var(--mut);font-size:11px}
+  .ck{width:18px;height:18px;border-radius:50%;background:var(--ok);color:var(--okfg);font-size:10px;font-weight:800;display:grid;place-items:center;flex:none}
+  .ck.no{background:transparent;border:1.5px solid var(--mut);color:var(--mut)}
+  .bt{margin-left:auto;background:var(--btn);border:0;color:var(--fg);font:inherit;font-size:12px;padding:5px 12px;border-radius:7px}
+  .tr{height:70px;border:1px solid var(--line);border-radius:8px;background:var(--field);padding:10px;font-size:13px;margin-top:6px}
+  .hs{display:flex;gap:10px;padding:9px 0}.hs+.hs{border-top:1px solid var(--line)}
+  .hs p{font-size:12.5px}.hs small{color:var(--mut);font-size:10.5px}
+  .ft{display:flex;justify-content:space-between;align-items:center;color:var(--mut);font-size:10.5px}
+
+  /* pills */
+  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .hud{display:inline-flex;align-items:center;gap:10px;padding:9px 18px 9px 14px;border-radius:99px;font-size:12.5px;font-weight:500}
+  .hud.dark{background:#000;color:#fff;border:1px solid #2c2c2c}.hud.light{background:#fff;color:#000;border:1px solid #ddd}
+  .m{display:flex;gap:2.5px;align-items:center;height:18px}.m i{display:block;width:3px;border-radius:2px;background:currentColor;animation:m .9s ease-in-out infinite}
+  .m i:nth-child(1){height:7px}.m i:nth-child(2){height:16px;animation-delay:.15s}.m i:nth-child(3){height:11px;animation-delay:.3s}.m i:nth-child(4){height:17px;animation-delay:.45s}.m i:nth-child(5){height:8px;animation-delay:.6s}
+  @keyframes m{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.35)}}
+  .sp{width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:s .8s linear infinite;opacity:.8}@keyframes s{to{transform:rotate(360deg)}}
+  .dn{width:16px;height:16px;border-radius:50%;background:currentColor;display:grid;place-items:center}.dn b{color:#000;font-size:9px}.hud.dark .dn b{color:#000}.hud.light .dn b{color:#fff}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- A · Bars: black squircle, solid white bars -->
+    <symbol id="A" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#000"/><rect x=".75" y=".75" width="62.5" height="62.5" rx="14.5" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
+      <g fill="#fff"><rect x="14" y="26" width="5" height="12" rx="2.5"/><rect x="22.5" y="18" width="5" height="28" rx="2.5"/><rect x="31" y="11" width="5" height="42" rx="2.5"/><rect x="39.5" y="20" width="5" height="24" rx="2.5"/><rect x="48" y="27" width="5" height="10" rx="2.5"/></g></symbol>
+    <!-- B · Wave: black circle with one continuous voice line -->
+    <symbol id="B" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#000"/><circle cx="32" cy="32" r="31.25" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
+      <path d="M11 32 C15 32 16 20 21 20 S26 44 31 44 S36 17 41 17 S45 32 53 32" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <!-- C · M monogram: white squircle, black M built from a voice line -->
+    <symbol id="C" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#fff"/>
+      <path d="M15 47 V17 L32 38 L49 17 V47" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <!-- D · Orb: concentric rings around a solid core -->
+    <symbol id="D" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#000"/><rect x=".75" y=".75" width="62.5" height="62.5" rx="14.5" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
+      <circle cx="32" cy="32" r="22" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="2"/><circle cx="32" cy="32" r="15" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="2"/><circle cx="32" cy="32" r="8" fill="#fff"/></symbol>
+    <!-- Bare marks (no container) for light tiles / lockups -->
+    <symbol id="Am" viewBox="0 0 64 64"><g fill="currentColor"><rect x="9" y="26" width="6" height="12" rx="3"/><rect x="19" y="17" width="6" height="30" rx="3"/><rect x="29" y="8" width="6" height="48" rx="3"/><rect x="39" y="19" width="6" height="26" rx="3"/><rect x="49" y="26" width="6" height="12" rx="3"/></g></symbol>
+    <symbol id="Bm" viewBox="0 0 64 64"><path d="M5 32 C11 32 13 17 20 17 S26 47 32 47 S38 14 44 14 S49 32 59 32" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="Cm" viewBox="0 0 64 64"><path d="M10 52 V13 L32 40 L54 13 V52" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="Dm" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="3"/><circle cx="32" cy="32" r="19" fill="none" stroke="currentColor" stroke-opacity=".62" stroke-width="3"/><circle cx="32" cy="32" r="10" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>Mumble — 4 monochrome variants</h1>
+  <p class="sub">Clean, modern, black &amp; white. Each variant has its own logo, app-window style and dictation pill.</p>
+  <nav><a href="#A">A · Bars</a><a href="#B">B · Wave</a><a href="#C">C · Monogram</a><a href="#D">D · Orb</a></nav>
+  <div id="out"></div>
+</div>
+
+<script>
+const V=[
+ {id:'A',name:'Bars',desc:'Five solid bars on a black squircle. The most direct "voice" symbol; reads clearly even at 16px. Dark window, white accents.',theme:'dark'},
+ {id:'B',name:'Wave',desc:'A single continuous voice line inside a circle. Softer, more organic and premium-feeling. Dark window.',theme:'dark'},
+ {id:'C',name:'Monogram',desc:'A bold "M" drawn as one line, inverted: black on a white tile. Strongest brand mark and stands out in the Dock. Light window.',theme:'light'},
+ {id:'D',name:'Orb',desc:'A solid core with two rings, like a mic pulse or radar. Minimal and calm; pairs well with a pulsing animation while listening. Dark window.',theme:'dark'}
+];
+const ic=(id,s)=>`<svg width="${s}" height="${s}"><use href="#${id}"/></svg>`;
+const mk=(id,s)=>`<svg width="${s}" height="${s}" viewBox="0 0 64 64"><use href="#${id}m"/></svg>`;
+function win(v){const t=v.theme;return `
+<div class="win ${t}">
+  <div class="tb"><i></i><i></i><i></i><span>Mumble</span></div>
+  <div class="bd">
+    <div class="hd">${ic(v.id,46)}<div><h3>Mumble</h3><p>Hold Right ⌥ (Option), speak, release.</p></div><span class="pl">Ready</span></div>
+    <div><div class="lb">Setup</div><div class="cd">
+      <div class="rw"><div class="ck">✓</div><div><b>Gemini API key</b><span>Found in ~/.zshenv</span></div></div>
+      <div class="rw"><div class="ck">✓</div><div><b>Microphone</b><span>Allowed</span></div></div>
+      <div class="rw"><div class="ck no">!</div><div><b>Accessibility</b><span>Needed to detect the hotkey and paste text</span></div><button class="bt">Open Settings</button></div>
+    </div></div>
+    <div><div class="lb">Try it</div><div class="cd" style="padding:12px 14px"><span style="color:var(--mut);font-size:11px">Click in the box, then hold Right ⌥ and speak.</span><div class="tr">Let's meet at 4 PM tomorrow, and please bring the budget report.</div></div></div>
+    <div><div class="lb">History</div><div class="cd">
+      <div class="hs"><div style="flex:1"><p>Hey Sarah, can you send me the invoice by Thursday? Thanks.</p><small>1:42 PM · live+gemini-3.5-flash-lite</small></div><button class="bt" style="margin:0;padding:3px 9px">Copy</button></div>
+      <div class="hs"><div style="flex:1"><p>The Kubernetes cluster is failing on staging, please check the logs.</p><small>1:40 PM · live+gemini-3.5-flash-lite</small></div><button class="bt" style="margin:0;padding:3px 9px">Copy</button></div>
+    </div></div>
+    <div class="ft"><button class="bt" style="margin:0">Edit Dictionary…</button><span>Stays in your menu bar when closed.</span></div>
+  </div>
+</div>
+<div class="pills">
+  <div class="hud ${t}"><div class="m"><i></i><i></i><i></i><i></i><i></i></div>Listening…</div>
+  <div class="hud ${t}"><div class="sp"></div>Transcribing…</div>
+  <div class="hud ${t}"><div class="dn"><b>✓</b></div>Done</div>
+</div>`}
+document.getElementById('out').innerHTML=V.map(v=>`
+<section id="${v.id}">
+  <div class="tag">Variant ${v.id}</div><h2>${v.name}</h2><p class="desc">${v.desc}</p>
+  <div class="row">
+    <div class="logos">
+      <div class="tile b">${ic(v.id,128)}<small>App icon</small></div>
+      <div class="tile w">${mk(v.id,112).replace('<svg','<svg style="color:#000"')}<small>Mark · on white</small></div>
+      <div class="tile b wide"><div class="lockup">${ic(v.id,52)}<span class="wm">Mumble</span></div><small>Lockup · black</small></div>
+      <div class="tile w wide"><div class="lockup">${mk(v.id,46).replace('<svg','<svg style="color:#000"')}<span class="wm">Mumble</span></div><small>Lockup · white (mark only)</small></div>
+      <div class="tile g wide"><div class="sizes">${ic(v.id,16)}${ic(v.id,24)}${ic(v.id,32)}${ic(v.id,48)}${ic(v.id,72)}</div><small>16 / 24 / 32 / 48 / 72 px</small></div>
+    </div>
+    <div>${win(v)}</div>
+  </div>
+</section>`).join('');
+</script>
+</body>
+</html>
