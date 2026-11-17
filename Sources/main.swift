@@ -451,6 +451,8 @@ struct MainView: View {
                     }.padding(6).frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                UpdatesBox()
+
                 HStack {
                     Button("Edit Dictionary…") { NSWorkspace.shared.open(URL(fileURLWithPath: Config.dir + "/dictionary.txt")) }
                     Spacer()
@@ -482,6 +484,366 @@ struct MainView: View {
             }
         }
     }
+}
+
+// MARK: - Auto update (GitHub Releases)
+
+/// Checks GitHub Releases for a newer DScribe, downloads the DMG, verifies its SHA-256 (from the GitHub
+/// asset digest), bundle id and code signature, then swaps the app bundle in place and relaunches.
+/// No Sparkle / no server: the GitHub "latest release" API is the feed.
+final class Updater: ObservableObject {
+    static let shared = Updater()
+    static let repo = "jnikhil652/dscribe"
+    static var feedURL: URL {
+        URL(string: ProcessInfo.processInfo.environment["DSCRIBE_UPDATE_FEED"]
+            ?? "https://api.github.com/repos/\(repo)/releases/latest")!
+    }
+    static var currentVersion: String {
+        ProcessInfo.processInfo.environment["DSCRIBE_FAKE_VERSION"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+
+    struct Release { let version: String; let notes: String; let dmg: URL; let sha256: String?; let page: URL }
+    enum Status: Equatable {
+        case idle, checking, upToDate, available(String), downloading(String), installing(String), failed(String)
+    }
+
+    @Published var status: Status = .idle
+    @Published var autoCheck: Bool = UserDefaults.standard.object(forKey: "autoCheckUpdates") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoCheck, forKey: "autoCheckUpdates") }
+    }
+    @Published var autoInstall: Bool = UserDefaults.standard.object(forKey: "autoInstallUpdates") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(autoInstall, forKey: "autoInstallUpdates") }
+    }
+    @Published private(set) var latest: Release?
+    @Published private(set) var lastChecked: Date? = UserDefaults.standard.object(forKey: "lastUpdateCheck") as? Date
+    var onChange: (() -> Void)?
+    /// Called on the main thread when the update popup should appear.
+    var onPrompt: ((Release) -> Void)?
+    /// Versions the user chose to skip / a "remind me later" deadline.
+    var skippedVersion: String? {
+        get { UserDefaults.standard.string(forKey: "skippedVersion") }
+        set { UserDefaults.standard.set(newValue, forKey: "skippedVersion") }
+    }
+    var remindAfter: Date? {
+        get { UserDefaults.standard.object(forKey: "remindUpdateAfter") as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: "remindUpdateAfter") }
+    }
+    func remindLater() { remindAfter = Date().addingTimeInterval(24 * 3600) }
+    func skip(_ v: String) { skippedVersion = v; status = .idle; onChange?() }
+
+    /// Set right before relaunching into a new version, so it can show "Updated to X" with the notes.
+    static func markJustUpdated(_ r: Release) {
+        UserDefaults.standard.set(r.version, forKey: "justUpdatedTo")
+        UserDefaults.standard.set(r.notes, forKey: "justUpdatedNotes")
+    }
+    /// Returns the release we just updated to (once), if this launch is the first of a new version.
+    static func consumeJustUpdated() -> Release? {
+        let d = UserDefaults.standard
+        guard let v = d.string(forKey: "justUpdatedTo") else { return nil }
+        let notes = d.string(forKey: "justUpdatedNotes") ?? ""
+        d.removeObject(forKey: "justUpdatedTo"); d.removeObject(forKey: "justUpdatedNotes")
+        guard v == currentVersion else { return nil }
+        let page = URL(string: "https://github.com/\(repo)/releases/tag/v\(v)")!
+        return Release(version: v, notes: notes, dmg: page, sha256: nil, page: page)
+    }
+
+    /// GitHub release markdown -> readable plain-ish text for the popup.
+    static func renderNotes(_ md: String) -> AttributedString {
+        let lines = md.replacingOccurrences(of: "\r", with: "").split(separator: "\n", omittingEmptySubsequences: false).map { l -> String in
+            var t = l.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("#") { t = "**" + t.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces) + "**" }
+            else if t.hasPrefix("* ") || t.hasPrefix("- ") { t = "•  " + t.dropFirst(2) }
+            return t
+        }
+        let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let opts = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: text.isEmpty ? "Bug fixes and improvements." : text, options: opts))
+            ?? AttributedString(text)
+    }
+    /// Returns true when it's safe to restart (not recording/transcribing).
+    var isIdle: () -> Bool = { true }
+    private var timer: Timer?
+    private var pendingInstall = false
+
+    /// Numeric dotted-version compare ("1.10.0" > "1.9.2"); a leading "v" is ignored.
+    static func isNewer(_ a: String, than b: String) -> Bool {
+        func parts(_ s: String) -> [Int] {
+            s.trimmingCharacters(in: CharacterSet(charactersIn: "vV ")).split(separator: "-").first
+                .map { $0.split(separator: ".").map { Int($0) ?? 0 } } ?? []
+        }
+        let x = parts(a), y = parts(b)
+        for i in 0..<max(x.count, y.count) {
+            let l = i < x.count ? x[i] : 0, r = i < y.count ? y[i] : 0
+            if l != r { return l > r }
+        }
+        return false
+    }
+
+    /// Location we'd replace. nil (with a reason) when an in-place update isn't possible.
+    static func installTarget() -> (url: URL?, problem: String?) {
+        let b = Bundle.main.bundleURL
+        guard b.pathExtension == "app" else { return (nil, "Not running from an app bundle") }
+        if b.path.contains("/AppTranslocation/") || b.path.hasPrefix("/Volumes/") {
+            return (nil, "Move DScribe to Applications to enable updates")
+        }
+        guard FileManager.default.isWritableFile(atPath: b.deletingLastPathComponent().path) else {
+            return (nil, "No write access to \(b.deletingLastPathComponent().path)")
+        }
+        return (b, nil)
+    }
+
+    func start() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
+            guard let self, self.autoCheck else { return }
+            Task { await self.check(userInitiated: false) }
+        }
+        guard autoCheck else { return }
+        // Delay the first check so launch stays snappy.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { Task { await self.check(userInitiated: false) } }
+    }
+
+    private func set(_ s: Status) {
+        DispatchQueue.main.async { self.status = s; self.onChange?() }
+    }
+
+    func fetchLatest() async throws -> Release {
+        var req = URLRequest(url: Updater.feedURL)
+        req.timeoutInterval = 15
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.setValue("DScribe/\(Updater.currentVersion)", forHTTPHeaderField: "User-Agent")
+        let (d, r) = try await URLSession.shared.data(for: req)
+        let code = (r as? HTTPURLResponse)?.statusCode ?? 200  // non-HTTP (file:// test feed)
+        guard code == 200, let j = try JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let tag = j["tag_name"] as? String else { throw Gemini.Failure(description: "Update check failed (HTTP \(code))") }
+        let assets = j["assets"] as? [[String: Any]] ?? []
+        guard let a = assets.first(where: { ($0["name"] as? String)?.lowercased().hasSuffix(".dmg") == true }),
+              let s = a["browser_download_url"] as? String, let dmg = URL(string: s) else {
+            throw Gemini.Failure(description: "Release \(tag) has no DMG")
+        }
+        let digest = (a["digest"] as? String).flatMap { $0.hasPrefix("sha256:") ? String($0.dropFirst(7)) : nil }
+        let page = (j["html_url"] as? String).flatMap(URL.init) ?? URL(string: "https://github.com/\(Updater.repo)/releases/latest")!
+        return Release(version: tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV")),
+                       notes: j["body"] as? String ?? "", dmg: dmg, sha256: digest, page: page)
+    }
+
+    @MainActor func check(userInitiated: Bool) async {
+        if case .downloading = status { return }
+        if case .installing = status { return }
+        status = .checking; onChange?()
+        do {
+            let r = try await fetchLatest()
+            lastChecked = Date(); UserDefaults.standard.set(lastChecked, forKey: "lastUpdateCheck")
+            guard Updater.isNewer(r.version, than: Updater.currentVersion) else { status = .upToDate; onChange?(); return }
+            latest = r; status = .available(r.version); onChange?()
+            if autoInstall && !userInitiated && Updater.installTarget().url != nil { await install(); return }
+            // Background checks respect "Skip This Version" and "Remind Me Later"; a manual check always shows the popup.
+            if !userInitiated {
+                if skippedVersion == r.version { return }
+                if let t = remindAfter, t > Date() { return }
+            }
+            onPrompt?(r)
+        } catch {
+            status = userInitiated ? .failed("\(error)") : .idle; onChange?()
+        }
+    }
+
+    /// Download + verify + swap + relaunch. Waits until dictation is idle before restarting.
+    @MainActor func install() async {
+        guard let r = latest else { return }
+        let (target, problem) = Updater.installTarget()
+        guard let target else { status = .failed(problem ?? "Can't update in place"); onChange?(); return }
+        status = .downloading(r.version); onChange?()
+        do {
+            let newApp = try await Updater.downloadAndVerify(r)
+            status = .installing(r.version); onChange?()
+            while !isIdle() { try? await Task.sleep(nanoseconds: 500_000_000) }
+            Updater.markJustUpdated(r)
+            try Updater.swapAndRelaunch(newApp: newApp, target: target)
+            NSApp.terminate(nil)
+        } catch {
+            NSLog("DScribe update failed: \(error)")
+            status = .failed("\(error)"); onChange?()
+        }
+    }
+
+    /// Returns the verified DScribe.app copied out of the DMG into a temp dir.
+    static func downloadAndVerify(_ r: Release) async throws -> URL {
+        let (tmpFile, resp) = try await URLSession.shared.download(from: r.dmg)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw Gemini.Failure(description: "Download failed") }
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("dscribe-update-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        let dmg = work.appendingPathComponent("DScribe.dmg")
+        try FileManager.default.moveItem(at: tmpFile, to: dmg)
+
+        if let want = r.sha256 {
+            let got = try run("/usr/bin/shasum", ["-a", "256", dmg.path]).split(separator: " ").first.map(String.init) ?? ""
+            guard got.lowercased() == want.lowercased() else { throw Gemini.Failure(description: "Checksum mismatch — update rejected") }
+        }
+
+        let mount = work.appendingPathComponent("mnt")
+        _ = try run("/usr/bin/hdiutil", ["attach", dmg.path, "-nobrowse", "-noautoopen", "-readonly", "-mountpoint", mount.path])
+        defer { _ = try? run("/usr/bin/hdiutil", ["detach", mount.path, "-force"]) }
+        let src = mount.appendingPathComponent("DScribe.app")
+        let app = work.appendingPathComponent("DScribe.app")
+        _ = try run("/usr/bin/ditto", [src.path, app.path])
+
+        guard let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
+              info["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier ?? "fun.buildverse.dscribe" else {
+            throw Gemini.Failure(description: "Downloaded app has the wrong bundle id")
+        }
+        _ = try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app.path])
+        _ = try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", app.path])
+        return app
+    }
+
+    /// Hands off to a detached shell script that waits for us to quit, swaps the bundle
+    /// (keeping a backup until the copy succeeds) and launches the new version.
+    static func swapAndRelaunch(newApp: URL, target: URL) throws {
+        let script = """
+        pid=$1; new=$2; dst=$3
+        while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+        bak="$dst.old-$$"
+        mv "$dst" "$bak" || { open "$dst"; exit 1; }
+        if /usr/bin/ditto "$new" "$dst"; then rm -rf "$bak"; else rm -rf "$dst"; mv "$bak" "$dst"; fi
+        rm -rf "$(dirname "$new")"
+        open "$dst"
+        """
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", script, "dscribe-updater", String(ProcessInfo.processInfo.processIdentifier), newApp.path, target.path]
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        try p.run()
+    }
+
+    @discardableResult
+    static func run(_ tool: String, _ args: [String]) throws -> String {
+        let p = Process(); let out = Pipe(), err = Pipe()
+        p.executableURL = URL(fileURLWithPath: tool); p.arguments = args
+        p.standardOutput = out; p.standardError = err
+        try p.run(); p.waitUntilExit()
+        let o = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        guard p.terminationStatus == 0 else {
+            let e = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            throw Gemini.Failure(description: "\((tool as NSString).lastPathComponent) failed: \(e.prefix(160))")
+        }
+        return o
+    }
+
+    var summary: String {
+        switch status {
+        case .idle: return lastChecked.map { "Last checked \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Not checked yet"
+        case .checking: return "Checking…"
+        case .upToDate: return "You're on the latest version"
+        case .available(let v): return "Version \(v) is available"
+        case .downloading(let v): return "Downloading \(v)…"
+        case .installing(let v): return "Installing \(v) — DScribe will restart"
+        case .failed(let e): return "Update failed: \(e)"
+        }
+    }
+}
+
+struct UpdatesBox: View {
+    @ObservedObject var u = Updater.shared
+    var body: some View {
+        GroupBox(label: Text("Updates").font(.system(size: 12, weight: .semibold))) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("DScribe \(Updater.currentVersion)").font(.system(size: 13, weight: .semibold))
+                        Text(u.summary).font(.system(size: 11)).foregroundColor(isFailed ? .red : .secondary).lineLimit(2)
+                    }
+                    Spacer()
+                    if case .available = u.status {
+                        if Updater.installTarget().url != nil {
+                            Button("Install & Relaunch") { Task { await u.install() } }
+                        } else if let r = u.latest {
+                            Button("Download") { NSWorkspace.shared.open(r.page) }
+                        }
+                    } else {
+                        Button("Check Now") { Task { await u.check(userInitiated: true) } }.disabled(busy)
+                    }
+                }
+                if let p = Updater.installTarget().problem, case .available = u.status {
+                    Text(p).font(.system(size: 11)).foregroundColor(.secondary)
+                }
+                Toggle("Check for updates automatically", isOn: $u.autoCheck).font(.system(size: 12))
+                Toggle("Install updates silently (no popup)", isOn: $u.autoInstall).font(.system(size: 12)).disabled(!u.autoCheck)
+            }.padding(6)
+        }
+    }
+    var busy: Bool {
+        switch u.status { case .checking, .downloading, .installing: return true; default: return false }
+    }
+    var isFailed: Bool { if case .failed = u.status { return true }; return false }
+}
+
+/// The update popup: "new version available" (with notes, Install / Later / Skip) or "updated to X" after relaunch.
+struct UpdatePromptView: View {
+    enum Mode { case available, installed }
+    @ObservedObject var u = Updater.shared
+    let release: Updater.Release
+    let mode: Mode
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 56, height: 56)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mode == .available ? "A new version of DScribe is available" : "DScribe was updated to \(release.version)")
+                        .font(.system(size: 15, weight: .bold))
+                    Text(mode == .available ? "DScribe \(release.version) is out — you have \(Updater.currentVersion)." : "Here's what's new.")
+                        .font(.system(size: 12)).foregroundColor(.secondary)
+                }
+            }
+            Text(mode == .available ? "What's new" : "Release notes").font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary)
+            ScrollView {
+                Text(Updater.renderNotes(release.notes)).font(.system(size: 12)).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+            }
+            .frame(height: 170)
+            .background(Color.white.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 6))
+
+            if mode == .available, let msg = progress {
+                HStack(spacing: 8) {
+                    if !failed { ProgressView().controlSize(.small) }
+                    Text(msg).font(.system(size: 11)).foregroundColor(failed ? .red : .secondary).lineLimit(2)
+                }
+            }
+            if mode == .available, Updater.installTarget().url == nil, let p = Updater.installTarget().problem {
+                Text(p).font(.system(size: 11)).foregroundColor(.secondary)
+            }
+
+            HStack {
+                if mode == .available {
+                    Button("Skip This Version") { u.skip(release.version); close() }.disabled(working)
+                    Spacer()
+                    Button("Remind Me Later") { u.remindLater(); close() }.disabled(working)
+                    if Updater.installTarget().url != nil {
+                        Button(failed ? "Try Again" : "Install & Relaunch") { Task { await u.install() } }
+                            .keyboardShortcut(.defaultAction).disabled(working)
+                    } else {
+                        Button("Download") { NSWorkspace.shared.open(release.page); close() }.keyboardShortcut(.defaultAction)
+                    }
+                } else {
+                    Button("View on GitHub") { NSWorkspace.shared.open(release.page) }
+                    Spacer()
+                    Button("OK") { close() }.keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
+        .background(Color(white: 0.08))
+        .preferredColorScheme(.dark)
+        .tint(.white)
+    }
+
+    var working: Bool { switch u.status { case .downloading, .installing: return true; default: return false } }
+    var failed: Bool { if case .failed = u.status { return true }; return false }
+    var progress: String? { working || failed ? u.summary : nil }
 }
 
 // MARK: - HUD
@@ -536,6 +898,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let hud = HUD()
     var item: NSStatusItem!
     var lastMenuItem: NSMenuItem!
+    var updateMenuItem: NSMenuItem!
+    var updateWindow: NSWindow?
     var optionDown = false
     var busy = false
     var frontApp: String?
@@ -557,6 +921,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         m.addItem(.separator())
         m.addItem(withTitle: "Edit Dictionary…", action: #selector(editDict), keyEquivalent: "").target = self
         m.addItem(withTitle: "Open Privacy Settings…", action: #selector(openPrivacy), keyEquivalent: "").target = self
+        updateMenuItem = NSMenuItem(title: "Check for Updates…", action: #selector(updateAction), keyEquivalent: ""); updateMenuItem.target = self
+        m.addItem(updateMenuItem)
         m.addItem(.separator())
         m.addItem(withTitle: "Quit DScribe", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = m
@@ -566,7 +932,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] e in self?.flags(e) }
         NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] e in self?.flags(e); return e }
         buildMainMenu()
+        let u = Updater.shared
+        u.isIdle = { [weak self] in guard let self else { return true }; return !self.busy && !self.recorder.recording }
+        u.onChange = { [weak self] in self?.refreshUpdateMenu() }
+        u.onPrompt = { [weak self] r in self?.showUpdatePrompt(r, mode: .available) }
+        u.start()
         showWindow()
+        if let r = Updater.consumeJustUpdated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.showUpdatePrompt(r, mode: .installed) }
+        }
         if Config.apiKey == nil { hud.show("No API key set", color: .systemOrange); hud.hide(after: 4) }
     }
 
@@ -593,6 +967,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let appMenu = NSMenu(); appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(updateAction), keyEquivalent: "").target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit DScribe", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let editItem = NSMenuItem(); main.addItem(editItem)
         let edit = NSMenu(title: "Edit"); editItem.submenu = edit
@@ -689,6 +1065,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func refreshUpdateMenu() {
+        switch Updater.shared.status {
+        case .available(let v): updateMenuItem.title = "Install DScribe \(v) & Relaunch"; updateMenuItem.isEnabled = true
+        case .downloading(let v): updateMenuItem.title = "Downloading \(v)…"; updateMenuItem.isEnabled = false
+        case .installing(let v): updateMenuItem.title = "Installing \(v)…"; updateMenuItem.isEnabled = false
+        case .checking: updateMenuItem.title = "Checking for Updates…"; updateMenuItem.isEnabled = false
+        default: updateMenuItem.title = "Check for Updates…"; updateMenuItem.isEnabled = true
+        }
+    }
+    @objc func updateAction() {
+        let u = Updater.shared
+        Task { @MainActor in
+            if case .available = u.status, let r = u.latest { self.showUpdatePrompt(r, mode: .available); return }
+            await u.check(userInitiated: true)   // shows the popup itself when an update exists
+            switch u.status {
+            case .upToDate: self.simpleAlert("You're up to date", "DScribe \(Updater.currentVersion) is the latest version.")
+            case .failed(let e): self.simpleAlert("Couldn't check for updates", e)
+            default: break
+            }
+        }
+    }
+
+    func showUpdatePrompt(_ r: Updater.Release, mode: UpdatePromptView.Mode) {
+        updateWindow?.close()
+        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 380),
+                        styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        w.titlebarAppearsTransparent = true; w.titleVisibility = .hidden
+        w.isReleasedWhenClosed = false; w.level = .floating
+        w.appearance = NSAppearance(named: .darkAqua); w.backgroundColor = NSColor(white: 0.08, alpha: 1)
+        w.contentView = NSHostingView(rootView: UpdatePromptView(release: r, mode: mode) { [weak self] in
+            self?.updateWindow?.close(); self?.updateWindow = nil
+        })
+        w.setContentSize(w.contentView!.fittingSize)
+        w.center(); updateWindow = w
+        w.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func simpleAlert(_ title: String, _ text: String) {
+        let a = NSAlert(); a.messageText = title; a.informativeText = text
+        NSApp.activate(ignoringOtherApps: true); a.runModal()
+    }
+
     @objc func copyLast() {
         if let t = lastMenuItem.representedObject as? String { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string) }
     }
@@ -738,6 +1157,46 @@ if args.count >= 3, args[1] == "--live" {
         sem.signal()
     }
     sem.wait(); exit(0)
+}
+
+if args.count >= 2, args[1] == "--check-update" {
+    // DScribe --check-update [--install] : prints current vs latest; with --install, downloads, verifies and swaps in place.
+    let sem = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            let r = try await Updater.shared.fetchLatest()
+            let newer = Updater.isNewer(r.version, than: Updater.currentVersion)
+            print("current \(Updater.currentVersion), latest \(r.version) (sha256 \(r.sha256 ?? "none")) -> \(newer ? "UPDATE AVAILABLE" : "up to date")")
+            if newer, args.count > 2, args[2] == "--install" {
+                let (target, problem) = Updater.installTarget()
+                guard let target else { print("CANNOT INSTALL: \(problem ?? "")"); exit(1) }
+                let app = try await Updater.downloadAndVerify(r)
+                print("verified \(app.path)")
+                try Updater.swapAndRelaunch(newApp: app, target: target)
+                print("swapping \(target.path) and relaunching")
+            }
+        } catch { print("ERROR: \(error)"); exit(1) }
+        sem.signal()
+    }
+    sem.wait(); exit(0)
+}
+
+if args.count >= 3, args[1] == "--snapshot-update" {
+    // DScribe --snapshot-update out.png : renders the update popup with the latest real release notes
+    let a = NSApplication.shared; a.setActivationPolicy(.accessory)
+    let sem = DispatchSemaphore(value: 0); var rel: Updater.Release?
+    Task { rel = try? await Updater.shared.fetchLatest(); sem.signal() }
+    sem.wait()
+    let r = rel ?? Updater.Release(version: "9.9.9", notes: "## What's Changed\n* Example", dmg: URL(string: "https://x")!, sha256: nil, page: URL(string: "https://x")!)
+    let host = NSHostingView(rootView: UpdatePromptView(release: r, mode: .available) {})
+    let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 380), styleMask: [.titled], backing: .buffered, defer: false)
+    w.appearance = NSAppearance(named: .darkAqua); w.contentView = host
+    w.setContentSize(host.fittingSize); w.orderFrontRegardless()
+    RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+    let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+    host.cacheDisplay(in: host.bounds, to: rep)
+    try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+    exit(0)
 }
 
 if args.count >= 3, args[1] == "--snapshot" {

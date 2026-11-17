@@ -27,5 +27,7 @@ cat > "$APP/Contents/Info.plist" <<PL
 <key>NSMicrophoneUsageDescription</key><string>DScribe records your voice while you hold the dictation key.</string>
 </dict></plist>
 PL
-codesign --force --sign - "$APP"
+# SIGN_IDENTITY: a stable (e.g. self-signed) code-signing identity. With ad-hoc signing ("-") macOS ties
+# Accessibility/Microphone grants to the exact binary hash, so every update would silently lose them.
+codesign --force --sign "${SIGN_IDENTITY:--}" ${KEYCHAIN:+--keychain "$KEYCHAIN"} "$APP"
 echo "Built $PWD/$APP ($(lipo -archs "$APP/Contents/MacOS/DScribe"))"

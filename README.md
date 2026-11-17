@@ -12,6 +12,7 @@ An open-source alternative to Wispr Flow. Free to run: transcription uses a free
 - Applies self-corrections: *"3 pm, no wait, 4 pm"* → *"4 PM"*.
 - Adds punctuation and capitalization; matches tone to the frontmost app (casual in chat, literal in code editors).
 - Personal dictionary for names and jargon: `~/.dscribe/dictionary.txt`.
+- **Auto-updates** from GitHub Releases: checks at launch and every 6 hours and pops up *"A new version is available"* with the release notes (**Install & Relaunch**, **Remind Me Later**, **Skip This Version**). Installing verifies the download's SHA-256 and code signature, swaps the app in place and relaunches (waiting until you're not dictating), then shows what's new. Prefer no popup? Turn on *Install updates silently* in the app window's *Updates* panel. *Check for Updates…* is in the menu bar.
 - Dark app window with setup checks (API key, Microphone, Accessibility), a "try it" box and dictation history; it also lives in the menu bar after you close the window.
 
 ## Install
@@ -66,7 +67,11 @@ Requires Xcode command-line tools (Swift 5.9+). Headless pipeline test (no mic n
 DScribe.app/Contents/MacOS/DScribe --live sample.wav [AppName]   # 16 kHz mono PCM16 WAV
 ```
 
-Releases are built by GitHub Actions: push a tag like `v1.0.0` and `DScribe.dmg` is attached to the release.
+Releases are built by GitHub Actions: push a tag like `v1.0.0` and `DScribe.dmg` is attached to the release. Installed copies pick it up automatically.
+
+Updater test (no UI): `DScribe.app/Contents/MacOS/DScribe --check-update [--install]`. Build with `VERSION=1.0.0 ./build.sh` to simulate an old version; `DSCRIBE_UPDATE_FEED` points it at another release JSON.
+
+**Release signing.** Ad-hoc signed builds are identified by their exact binary hash, so macOS drops the Accessibility/Microphone grants after every update. Sign releases with a stable self-signed identity instead: run `scripts/make-signing-cert.sh` once and add the two secrets it prints (`SIGNING_CERT_P12`, `SIGNING_CERT_PASSWORD`); the release workflow uses them when present. Locally: `SIGN_IDENTITY="DScribe Self-Signed" ./build.sh`.
 
 ## Limitations / roadmap
 
